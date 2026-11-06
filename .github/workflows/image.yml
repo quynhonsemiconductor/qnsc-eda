@@ -1,0 +1,142 @@
+# =============================================================================
+# Image — build and test the toolchain on every PR, publish by digest on main.
+#
+# PR: builds the same Dockerfile target the publish path uses, runs the
+#     build-time version gate and the smoke regression, pushes nothing.
+#     This is also what a Renovate dated-suite bump exercises.
+# main: calls the org's shared GHCR reusable (ci), which builds ONCE, scans the
+#     image for CRITICAL CVEs and secrets BEFORE the push, pushes the scanned
+#     layers, and attaches provenance + SBOM attestations to the pushed digest.
+#     The smoke job then pulls that digest and re-runs the gate and regression.
+#
+# The image name is ghcr.io/quynhonsemiconductor/qnsc-eda: product=qnsc,
+# service=eda (the reusable's naming convention).
+# =============================================================================
+name: Image
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  build:
+    name: Image build (pull request)
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Read the main-branch cache written by the publish path (same scope) but
+      # write none from a PR ref: an Actions cache written by a PR is readable
+      # by nobody else and evicts the entries main does use.
+      - name: Build the eda target (no push)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: Dockerfile
+          target: eda
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: qnsc-eda:pr
+          cache-from: type=gha,scope=qnsc-eda-amd64
+          provenance: false
+          sbom: false
+
+      # The Dockerfile already ran this gate; running it again on the loaded
+      # image proves the PATH overlay survived the final stage.
+      - name: Version gate
+        run: docker run --rm qnsc-eda:pr check-versions
+
+      - name: Smoke regression (verilate + simulate tiny core)
+        run: docker run --rm qnsc-eda:pr bash /opt/smoke/run.sh
+
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+      # The scan path attests the pushed digest (provenance + SBOM).
+      id-token: write
+      attestations: write
+    uses: quynhonsemiconductor/ci/.github/workflows/ghcr-publish.yml@48fc4396cdd65a9f83fa0efd9945587b50eea9ee # v1.34.3
+    with:
+      product: qnsc
+      services-json: '["eda"]'
+      platforms: linux/amd64
+      build_runner: ubuntu-24.04
+
+  # ---------------------------------------------------------------------------
+  digest-smoke:
+    name: Smoke (published digest)
+    needs: publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+      attestations: read
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Pull the digest the publish job attested
+        id: pull
+        env:
+          DIGESTS: ${{ needs.publish.outputs.digests }}
+        run: |
+          set -euo pipefail
+          digest="$(jq -r '.eda' <<<"$DIGESTS")"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::no digest for eda: $DIGESTS"; exit 1; }
+          ref="ghcr.io/quynhonsemiconductor/qnsc-eda@${digest}"
+          docker pull "$ref"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          {
+            echo "### qnsc-eda"
+            echo '```'
+            echo "$ref"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Version gate on the published image
+        run: docker run --rm "${{ steps.pull.outputs.ref }}" check-versions
+
+      - name: Smoke regression on the published image
+        run: docker run --rm "${{ steps.pull.outputs.ref }}" bash /opt/smoke/run.sh
+
+      # SBOM and provenance are GitHub attestations on the pushed digest, made
+      # by ci's build-push-image scan path. A push that failed to attest is a
+      # failed publish, not a warning.
+      - name: Verify provenance and SBOM attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ steps.pull.outputs.ref }}
+        run: |
+          set -euo pipefail
+          gh attestation verify "oci://${REF}" --repo "$GITHUB_REPOSITORY"
+          gh attestation verify "oci://${REF}" --repo "$GITHUB_REPOSITORY" \
+            --predicate-type https://spdx.dev/Document

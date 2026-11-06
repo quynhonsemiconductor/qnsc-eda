@@ -1,0 +1,28 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["local>quynhonsemiconductor/.github:renovate-config"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The dated OSS CAD Suite build. Its tags are dates (2026-11-05), so the dockerfile manager cannot see it; this manager updates the ARG in the Dockerfile and the PR build re-runs the version gate and the smoke regression.",
+      "fileMatch": ["^Dockerfile$"],
+      "matchStrings": [
+        "ARG OSS_CAD_SUITE_DATE=(?<currentValue>\\d{4}-\\d{2}-\\d{2})"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "YosysHQ/oss-cad-suite-build",
+      "versioningTemplate": "regex:^(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})$"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Monthly suite bump, never automerged: it changes every tool the image inherits from the suite (Icarus, SymbiYosys, GHDL, GTKWave), so the PR is a prompt to read the rebuild and the smoke result.",
+      "matchDatasources": ["github-releases"],
+      "matchPackageNames": ["YosysHQ/oss-cad-suite-build"],
+      "schedule": ["0 5 1 * *"],
+      "automerge": false,
+      "platformAutomerge": false,
+      "labels": ["dependencies", "toolchain"]
+    }
+  ]
+}

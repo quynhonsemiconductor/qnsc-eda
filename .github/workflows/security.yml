@@ -1,0 +1,29 @@
+# =============================================================================
+# Security — the org's workflow-security checks (actionlint + zizmor).
+#
+# The job id `actions-security` is load-bearing: a reusable workflow's checks
+# report as `<caller job id> / <inner job name>`, so the required context is
+# `actions-security / Workflow security (actionlint, zizmor)`.
+# =============================================================================
+name: Security
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  actions-security:
+    permissions:
+      contents: read
+      security-events: write
+    uses: quynhonsemiconductor/ci/.github/workflows/actions-security.yml@48fc4396cdd65a9f83fa0efd9945587b50eea9ee # v1.34.3
+    with:
+      blocking: true
+      combine: true

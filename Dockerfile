@@ -2,7 +2,7 @@
 # =============================================================================
 # qnsc-eda — the VLSI platform's open-source EDA toolchain image.
 #
-# Design: product-docs/projects/vlsi-platform/00_DESIGN.md §4.
+# The tool versions below are the ones the VLSI platform's toolchain policy pins.
 #
 #   * Base: the pinned, dated OSS CAD Suite build (YosysHQ/oss-cad-suite-build)
 #     for the OSS tools it bundles (Icarus, SymbiYosys, GHDL, GTKWave, ...).
@@ -12,7 +12,7 @@
 #       v0.0-4298-g085eef05, Surfer v0.7.0.
 #     The suite builds those from upstream `master`/`main`, so a dated build
 #     carries development versions (at 2026-11-05: Verilator 5.055-devel,
-#     Yosys 0.70+336, cocotb 2.1.0.dev0).  Design §4 requires the pinned
+#     Yosys 0.70+336, cocotb 2.1.0.dev0).  The platform's toolchain policy requires the pinned
 #     releases, so Verilator and Yosys are built from their release tags here
 #     and cocotb/Surfer are installed from their releases.  scripts/
 #     check-versions.sh fails the build if any of the five is not exact.
@@ -24,16 +24,13 @@
 #   * Multi-stage: downloads and source builds happen in throw-away stages; the
 #     final stage carries only runtime packages, the tools and their data.
 # =============================================================================
-ARG UBUNTU_VERSION=26.04
-
 # ── Download the pinned upstream artefacts ──────────────────────────────────
-FROM ubuntu:${UBUNTU_VERSION} AS fetch
+FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c AS fetch
 ARG OSS_CAD_SUITE_DATE=2026-11-05
 ARG VERIBLE_VERSION=v0.0-4298-g085eef05
 ARG SURFER_VERSION=v0.7.0
-# The suite is pinned by its dated release tag.  GitHub publishes no checksum
-# asset for it; the release is immutable by convention and the image digest is
-# the reproducible identity downstream (SBOM + provenance attest it).
+# The suite is pinned by its dated release tag. GitHub publishes the tarball's
+# SHA-256 with the release asset; the build refuses a different archive.
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl xz-utils unzip \
@@ -42,6 +39,8 @@ RUN set -eux; \
     d="$(printf '%s' "${OSS_CAD_SUITE_DATE}" | tr -d -)"; \
     curl -fsSL -o /tmp/suite.tgz \
       "https://github.com/YosysHQ/oss-cad-suite-build/releases/download/${OSS_CAD_SUITE_DATE}/oss-cad-suite-linux-x64-${d}.tgz"; \
+    echo "c64d557848d57fad96a5bea7461e12b3ddfb49514658f7301f7e1a5476128a88  /tmp/suite.tgz" \
+      | sha256sum -c -; \
     tar -xzf /tmp/suite.tgz -C /opt; \
     rm /tmp/suite.tgz
 RUN set -eux; \
@@ -62,8 +61,9 @@ RUN set -eux; \
     rm /tmp/surfer.zip
 
 # ── Build the exact Verilator release (the suite ships 5.055-devel) ─────────
-FROM ubuntu:${UBUNTU_VERSION} AS verilator-build
+FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c AS verilator-build
 ARG VERILATOR_VERSION=5.054
+ARG VERILATOR_COMMIT=bbb60a403932a9f695cb6ff001ceb73de6ad9234
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -71,6 +71,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 RUN git clone --depth 1 --branch "v${VERILATOR_VERSION}" \
       https://github.com/verilator/verilator.git /src/verilator
+RUN test "$(git -C /src/verilator rev-parse HEAD)" = "${VERILATOR_COMMIT}"
 RUN cd /src/verilator \
  && autoconf \
  && ./configure --prefix=/opt/verilator \
@@ -78,8 +79,9 @@ RUN cd /src/verilator \
  && make install
 
 # ── Build the exact Yosys release (the suite ships 0.70+336) ────────────────
-FROM ubuntu:${UBUNTU_VERSION} AS yosys-build
+FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c AS yosys-build
 ARG YOSYS_VERSION=v0.70
+ARG YOSYS_COMMIT=28ba3cb926fe376fa05ebfc1b921747d011d4557
 ENV DEBIAN_FRONTEND=noninteractive
 # Yosys v0.70 builds with CMake (the Makefile was removed); >= 3.28 required.
 RUN apt-get update \
@@ -90,6 +92,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 RUN git clone --depth 1 --branch "${YOSYS_VERSION}" --recurse-submodules \
       --shallow-submodules https://github.com/YosysHQ/yosys.git /src/yosys
+RUN test "$(git -C /src/yosys rev-parse HEAD)" = "${YOSYS_COMMIT}"
 # Slang is disabled: it is a large submodule build, the suite's own Yosys (with
 # slang) remains at /opt/oss-cad-suite/bin/yosys, and the QSOC flow uses
 # read_verilog -sv.
@@ -103,7 +106,7 @@ RUN cmake --build /src/yosys/build -j"$(nproc)" \
  && cmake --install /src/yosys/build
 
 # ── Runtime image ───────────────────────────────────────────────────────────
-FROM ubuntu:${UBUNTU_VERSION} AS eda
+FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c AS eda
 ARG UBUNTU_VERSION=26.04
 ARG VERILATOR_VERSION=5.054
 ARG YOSYS_VERSION=v0.70
@@ -114,7 +117,8 @@ ARG SURFER_VERSION=v0.7.0
 LABEL org.opencontainers.image.title="qnsc-eda" \
       org.opencontainers.image.description="Open-source EDA toolchain for the QNSC VLSI platform" \
       org.opencontainers.image.licenses="Multiple (see /opt/oss-cad-suite/license and each tool)" \
-      org.opencontainers.image.base.name="docker.io/library/ubuntu:${UBUNTU_VERSION}" \
+      org.opencontainers.image.base.name="docker.io/library/ubuntu:26.04" \
+      org.opencontainers.image.base.digest="sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c" \
       vn.qnsc.toolchain.verilator="${VERILATOR_VERSION}" \
       vn.qnsc.toolchain.yosys="${YOSYS_VERSION}" \
       vn.qnsc.toolchain.cocotb="${COCOTB_VERSION}" \

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Build-time gate: the five tools design §4 pins must be EXACTLY these versions.
+# Build-time gate: the five tools the platform's toolchain policy pins must be EXACTLY these versions.
 #
 # The OSS CAD Suite is built from upstream master/main, so the dated build
 # carries development versions of Verilator, Yosys and cocotb.  This image
@@ -37,7 +37,11 @@ v="$(cocotb-config --version)"
 [ "$v" = "$EXPECT_COCOTB" ] && ok cocotb-config "$v" || bad cocotb-config "$EXPECT_COCOTB" "$v"
 
 # --- Verible -----------------------------------------------------------------
+# The release binary prints "Version\tv0.0-4298-g085eef05" on its first line
+# (verified against the v0.0-4298-g085eef05 static release); the second line is
+# Commit-Timestamp.
 v="$(verible-verilog-lint --version | awk '$1 == "Version" {print $2; exit}')"
+
 [ "$v" = "$EXPECT_VERIBLE" ] && ok verible "$v" || bad verible "$EXPECT_VERIBLE" "$v"
 
 # --- Surfer (and its remote server) -----------------------------------------
@@ -56,4 +60,4 @@ for tool in verilator yosys surfer surver cocotb-config; do
 done
 
 [ "$fail" -eq 0 ] || { echo "version gate failed" >&2; exit 1; }
-echo "all five design §4 pins match"
+echo "all five toolchain pins match"

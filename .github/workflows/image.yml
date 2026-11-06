@@ -23,7 +23,9 @@ on:
 
 concurrency:
   group: image-${{ github.ref }}
-  cancel-in-progress: true
+  # A push to main runs the publish path; a second push must queue behind it,
+  # never cancel a scan-and-push mid-flight.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

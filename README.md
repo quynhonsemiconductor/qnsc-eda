@@ -1,12 +1,12 @@
 # qnsc-eda
 
 The VLSI platform's open-source EDA toolchain, as one digest-pinned container
-image. Design: `product-docs/projects/vlsi-platform/00_DESIGN.md` §4 and §6.
+image.
 
 - **Base:** a pinned, dated [OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build)
   build (Icarus, SymbiYosys, GHDL, GTKWave and the rest of the suite).
 - **Pinned on top:** Verilator, Yosys, cocotb, Verible and Surfer at the exact
-  versions design §4 names. The suite tracks upstream `master`/`main`, so its
+  versions the platform's toolchain policy names. The suite tracks upstream `master`/`main`, so its
   dated build carries development versions of the first three; the Dockerfile
   builds/installs the releases over them and `scripts/check-versions.sh` fails
   the build unless all five are exact.
@@ -28,6 +28,10 @@ image. Design: `product-docs/projects/vlsi-platform/00_DESIGN.md` §4 and §6.
 
 Surfer is the client; `surver` is its remote server (marked experimental
 upstream — keep the local Surfer client as the fallback).
+
+Every downloaded artefact is checksum-verified: the OSS CAD Suite tarball, the
+Verible release and the Surfer release by SHA-256; Verilator and Yosys by the
+commit SHA of the checked-out tag.
 
 ## Build
 
@@ -75,7 +79,7 @@ so a suite bump is judged by a real build, not by the diff.
 
 The Verilator/Yosys/cocotb/Verible/Surfer pins move only by editing the
 Dockerfile arguments and the checksums in it; a bump is a deliberate change
-because design §4 pins them.
+because the platform's toolchain policy pins them.
 
 ## What is in the image
 

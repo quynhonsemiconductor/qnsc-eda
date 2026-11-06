@@ -1,0 +1,28 @@
+# =============================================================================
+# PR title — Conventional Commits. Thin caller of the org's shared action.
+#
+# Its own workflow on purpose: a title edit must re-check without cancelling the
+# image build (see the same note in vlsi_deep_training/.github/workflows/
+# pr-title.yml). The check name below IS a required status check.
+# =============================================================================
+name: PR title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-title:
+    name: PR title (conventional commits)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: quynhonsemiconductor/ci/actions/pr-title-conventional-commits@48fc4396cdd65a9f83fa0efd9945587b50eea9ee # v1.34.3

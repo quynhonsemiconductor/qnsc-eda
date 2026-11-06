@@ -92,6 +92,39 @@ jobs:
       build_runner: ubuntu-24.04
 
   # ---------------------------------------------------------------------------
+  # The digest-only pin is what consumers deploy, but Renovate needs a tag whose
+  # digest moves to detect a new build. `main` is that alias: it always points at
+  # the newest digest published from main. Consumers pin `:main@sha256:…`; the
+  # digest stays the identity, the tag lets Renovate update it.
+  alias-main:
+    name: Alias main
+    needs: publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Point the moving main tag at the published digest
+        env:
+          DIGESTS: ${{ needs.publish.outputs.digests }}
+        run: |
+          set -euo pipefail
+          digest="$(jq -r '.eda' <<<"$DIGESTS")"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::no digest for eda: $DIGESTS"; exit 1; }
+          docker buildx imagetools create \
+            -t ghcr.io/quynhonsemiconductor/qnsc-eda:main \
+            "ghcr.io/quynhonsemiconductor/qnsc-eda@${digest}"
+
+  # ---------------------------------------------------------------------------
   digest-smoke:
     name: Smoke (published digest)
     needs: publish

@@ -130,10 +130,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Version gate on the published image
-        run: docker run --rm "${{ steps.pull.outputs.ref }}" check-versions
+        env:
+          REF: ${{ steps.pull.outputs.ref }}
+        run: docker run --rm "$REF" check-versions
 
       - name: Smoke regression on the published image
-        run: docker run --rm "${{ steps.pull.outputs.ref }}" bash /opt/smoke/run.sh
+        env:
+          REF: ${{ steps.pull.outputs.ref }}
+        run: docker run --rm "$REF" bash /opt/smoke/run.sh
 
       # SBOM and provenance are GitHub attestations on the pushed digest, made
       # by ci's build-push-image scan path. A push that failed to attest is a

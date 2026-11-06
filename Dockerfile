@@ -173,8 +173,8 @@ COPY smoke /opt/smoke
 RUN chmod 0755 /usr/local/bin/check-versions /opt/smoke/run.sh \
  && check-versions
 
-RUN groupadd --gid 1001 eda \
- && useradd --uid 1001 --gid 1001 --create-home --shell /bin/bash eda
+RUN /usr/sbin/groupadd --gid 1001 eda \
+ && /usr/sbin/useradd --uid 1001 --gid 1001 --create-home --shell /bin/bash eda
 ENV HOME=/home/eda
 WORKDIR /home/eda
 USER 1001:1001

@@ -39,9 +39,11 @@ v="$(cocotb-config --version)"
 # --- Verible -----------------------------------------------------------------
 # The release binary prints "Version\tv0.0-4298-g085eef05" on its first line
 # (verified against the v0.0-4298-g085eef05 static release); the second line is
-# Commit-Timestamp.
-v="$(verible-verilog-lint --version | awk '$1 == "Version" {print $2; exit}')"
-
+# Commit-Timestamp. Read the whole output before parsing: an `awk ... exit` on
+# the left of a pipe can make the producer die of SIGPIPE, which `pipefail`
+# turns into exit 141.
+verible_version_output="$(verible-verilog-lint --version)"
+v="$(printf '%s\n' "$verible_version_output" | awk '$1 == "Version" {print $2; found = 1} END {exit !found}')"
 [ "$v" = "$EXPECT_VERIBLE" ] && ok verible "$v" || bad verible "$EXPECT_VERIBLE" "$v"
 
 # --- Surfer (and its remote server) -----------------------------------------

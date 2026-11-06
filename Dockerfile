@@ -43,6 +43,8 @@ RUN set -eux; \
       | sha256sum -c -; \
     tar -xzf /tmp/suite.tgz -C /opt; \
     rm /tmp/suite.tgz
+# The Verible release directory and its bin/ are mode 700; uid 1001 must be able
+# to traverse them or PATH search reports the binaries as "command not found".
 RUN set -eux; \
     curl -fsSL -o /tmp/verible.tgz \
       "https://github.com/chipsalliance/verible/releases/download/${VERIBLE_VERSION}/verible-${VERIBLE_VERSION}-linux-static-x86_64.tar.gz"; \
@@ -50,6 +52,7 @@ RUN set -eux; \
       | sha256sum -c -; \
     tar -xzf /tmp/verible.tgz -C /tmp; \
     mv "/tmp/verible-${VERIBLE_VERSION}" /opt/verible; \
+    chmod 0755 /opt/verible /opt/verible/bin; \
     rm /tmp/verible.tgz
 RUN set -eux; \
     curl -fsSL -o /tmp/surfer.zip \

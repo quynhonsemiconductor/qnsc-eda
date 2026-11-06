@@ -66,6 +66,11 @@ jobs:
       - name: Version gate
         run: docker run --rm qnsc-eda:pr check-versions
 
+      # The gate only prints "ok verible"; this prints the line the parse reads,
+      # as user 1001, so a traversal/permission regression is visible too.
+      - name: Verible version line from the built image
+        run: docker run --rm qnsc-eda:pr verible-verilog-lint --version
+
       - name: Smoke regression (verilate + simulate tiny core)
         run: docker run --rm qnsc-eda:pr bash /opt/smoke/run.sh
 

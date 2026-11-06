@@ -27,6 +27,7 @@
 # ── Download the pinned upstream artefacts ──────────────────────────────────
 FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c AS fetch
 ARG OSS_CAD_SUITE_DATE=2026-11-05
+ARG OSS_CAD_SUITE_SHA256=c64d557848d57fad96a5bea7461e12b3ddfb49514658f7301f7e1a5476128a88
 ARG VERIBLE_VERSION=v0.0-4298-g085eef05
 ARG SURFER_VERSION=v0.7.0
 # The suite is pinned by its dated release tag. GitHub publishes the tarball's
@@ -39,7 +40,7 @@ RUN set -eux; \
     d="$(printf '%s' "${OSS_CAD_SUITE_DATE}" | tr -d -)"; \
     curl -fsSL -o /tmp/suite.tgz \
       "https://github.com/YosysHQ/oss-cad-suite-build/releases/download/${OSS_CAD_SUITE_DATE}/oss-cad-suite-linux-x64-${d}.tgz"; \
-    echo "c64d557848d57fad96a5bea7461e12b3ddfb49514658f7301f7e1a5476128a88  /tmp/suite.tgz" \
+    echo "${OSS_CAD_SUITE_SHA256}  /tmp/suite.tgz" \
       | sha256sum -c -; \
     tar -xzf /tmp/suite.tgz -C /opt; \
     rm /tmp/suite.tgz

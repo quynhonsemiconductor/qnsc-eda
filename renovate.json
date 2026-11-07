@@ -1,75 +1,42 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["local>quynhonsemiconductor/.github:renovate-config"],
+  "extends": [
+    "local>quynhonsemiconductor/.github:renovate-config"
+  ],
   "customManagers": [
     {
       "customType": "regex",
       "description": "The dated OSS CAD Suite build and the tarball's SHA-256. The release tags are dates (2026-11-05), and the attachment digest is the linux-x64 tarball hash, so github-release-attachments updates the date and the checksum in ONE update; the PR build then re-runs the version gate and the smoke regression.",
-      "fileMatch": ["^Dockerfile$"],
+      "fileMatch": [
+        "^Dockerfile$"
+      ],
       "matchStrings": [
         "ARG OSS_CAD_SUITE_DATE=(?<currentValue>\\d{4}-\\d{2}-\\d{2})\\nARG OSS_CAD_SUITE_SHA256=(?<currentDigest>[0-9a-f]{64})"
       ],
       "datasourceTemplate": "github-release-attachments",
       "depNameTemplate": "YosysHQ/oss-cad-suite-build",
       "versioningTemplate": "regex:^(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})$"
-    },
-    {
-      "customType": "regex",
-      "description": "The Surfer release tag and its git commit, used by both the native build and the WASM build compiled from the same tag.",
-      "fileMatch": ["^Dockerfile$"],
-      "matchStrings": [
-        "ARG SURFER_VERSION=(?<currentValue>v[0-9][^\\n]*)\\nARG SURFER_COMMIT=(?<currentDigest>[0-9a-f]{40})"
-      ],
-      "datasourceTemplate": "gitlab-releases",
-      "depNameTemplate": "surfer-project/surfer"
-    },
-    {
-      "customType": "regex",
-      "description": "code-server: release tag plus the linux-amd64 tarball's SHA-256.",
-      "fileMatch": ["^Dockerfile$"],
-      "matchStrings": [
-        "ARG CODE_SERVER_VERSION=(?<currentValue>v[0-9][^\\n]*)\\nARG CODE_SERVER_SHA256=(?<currentDigest>[0-9a-f]{64})"
-      ],
-      "datasourceTemplate": "github-release-attachments",
-      "depNameTemplate": "coder/code-server"
-    },
-    {
-      "customType": "regex",
-      "description": "trunk (the WASM bundler): release tag plus the x86_64 linux tarball's SHA-256.",
-      "fileMatch": ["^Dockerfile$"],
-      "matchStrings": [
-        "ARG TRUNK_VERSION=(?<currentValue>v[0-9][^\\n]*)\\nARG TRUNK_SHA256=(?<currentDigest>[0-9a-f]{64})"
-      ],
-      "datasourceTemplate": "github-release-attachments",
-      "depNameTemplate": "trunk-rs/trunk"
     }
   ],
   "packageRules": [
     {
       "description": "Monthly suite bump (14-day release-age floor, never automerged): it changes every tool the image inherits from the suite (Icarus, SymbiYosys, GHDL, GTKWave), and the checksum moves with the date. The PR is a prompt to read the rebuild and the smoke result.",
-      "matchDatasources": ["github-release-attachments"],
-      "matchPackageNames": ["YosysHQ/oss-cad-suite-build"],
-      "schedule": ["0 5 1 * *"],
+      "matchDatasources": [
+        "github-release-attachments"
+      ],
+      "matchPackageNames": [
+        "YosysHQ/oss-cad-suite-build"
+      ],
+      "schedule": [
+        "0 5 1 * *"
+      ],
       "minimumReleaseAge": "14 days",
       "automerge": false,
       "platformAutomerge": false,
-      "labels": ["dependencies", "toolchain"]
-    },
-    {
-      "description": "Surfer moves native and web together (one tag, one commit); 14-day floor, reviewed.",
-      "matchPackageNames": ["surfer-project/surfer"],
-      "minimumReleaseAge": "14 days",
-      "automerge": false,
-      "platformAutomerge": false,
-      "labels": ["dependencies", "toolchain"]
-    },
-    {
-      "description": "code-server and trunk: 14-day floor, reviewed. A bump rebuilds the image and smoke-tests both browser apps.",
-      "matchPackageNames": ["coder/code-server", "trunk-rs/trunk"],
-      "minimumReleaseAge": "14 days",
-      "automerge": false,
-      "platformAutomerge": false,
-      "labels": ["dependencies", "toolchain"]
+      "labels": [
+        "dependencies",
+        "toolchain"
+      ]
     }
   ]
 }

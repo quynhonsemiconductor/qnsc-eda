@@ -20,7 +20,7 @@
 #     foundry libraries.  Do not add one.
 #   * Non-root: the image runs as uid 1001 (the GitHub-hosted runner user, so
 #     `container:` jobs can write the mounted workspace; Coder mounts the PVC
-#     at /home/eda).
+#     at /home/coder).
 #   * Multi-stage: downloads and source builds happen in throw-away stages; the
 #     final stage carries only runtime packages, the tools and their data.
 # =============================================================================
@@ -232,7 +232,7 @@ RUN chmod 0755 /usr/local/bin/check-versions /opt/smoke/run.sh \
 RUN /usr/sbin/groupadd --gid 1001 coder \
  && /usr/sbin/useradd --uid 1001 --gid 1001 --create-home --shell /bin/bash coder
 ENV HOME=/home/coder
-WORKDIR /home/eda
+WORKDIR /home/coder
 USER 1001:1001
 
 CMD ["/bin/bash"]

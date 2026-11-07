@@ -1,11 +1,15 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["local>quynhonsemiconductor/.github:renovate-config"],
+  "extends": [
+    "local>quynhonsemiconductor/.github:renovate-config"
+  ],
   "customManagers": [
     {
       "customType": "regex",
       "description": "The dated OSS CAD Suite build and the tarball's SHA-256. The release tags are dates (2026-11-05), and the attachment digest is the linux-x64 tarball hash, so github-release-attachments updates the date and the checksum in ONE update; the PR build then re-runs the version gate and the smoke regression.",
-      "fileMatch": ["^Dockerfile$"],
+      "fileMatch": [
+        "^Dockerfile$"
+      ],
       "matchStrings": [
         "ARG OSS_CAD_SUITE_DATE=(?<currentValue>\\d{4}-\\d{2}-\\d{2})\\nARG OSS_CAD_SUITE_SHA256=(?<currentDigest>[0-9a-f]{64})"
       ],
@@ -17,13 +21,22 @@
   "packageRules": [
     {
       "description": "Monthly suite bump (14-day release-age floor, never automerged): it changes every tool the image inherits from the suite (Icarus, SymbiYosys, GHDL, GTKWave), and the checksum moves with the date. The PR is a prompt to read the rebuild and the smoke result.",
-      "matchDatasources": ["github-release-attachments"],
-      "matchPackageNames": ["YosysHQ/oss-cad-suite-build"],
-      "schedule": ["0 5 1 * *"],
+      "matchDatasources": [
+        "github-release-attachments"
+      ],
+      "matchPackageNames": [
+        "YosysHQ/oss-cad-suite-build"
+      ],
+      "schedule": [
+        "0 5 1 * *"
+      ],
       "minimumReleaseAge": "14 days",
       "automerge": false,
       "platformAutomerge": false,
-      "labels": ["dependencies", "toolchain"]
+      "labels": [
+        "dependencies",
+        "toolchain"
+      ]
     }
   ]
 }

@@ -20,7 +20,7 @@
 #     foundry libraries.  Do not add one.
 #   * Non-root: the image runs as uid 1001 (the GitHub-hosted runner user, so
 #     `container:` jobs can write the mounted workspace; Coder mounts the PVC
-#     at /home/eda).
+#     at /home/coder).
 #   * Multi-stage: downloads and source builds happen in throw-away stages; the
 #     final stage carries only runtime packages, the tools and their data.
 # =============================================================================
@@ -30,6 +30,9 @@ ARG OSS_CAD_SUITE_DATE=2026-11-05
 ARG OSS_CAD_SUITE_SHA256=c64d557848d57fad96a5bea7461e12b3ddfb49514658f7301f7e1a5476128a88
 ARG VERIBLE_VERSION=v0.0-4298-g085eef05
 ARG SURFER_VERSION=v0.7.0
+ARG SURFER_COMMIT=bd749b1f786c1c62cd67893ca71346cbe6983915
+ARG CODE_SERVER_VERSION=v4.145.0
+ARG CODE_SERVER_SHA256=771bf6038658034d7caf509fcc44af50f0b8bdac5e738177b6cf9c4181dd3382
 # The suite is pinned by its dated release tag. GitHub publishes the tarball's
 # SHA-256 with the release asset; the build refuses a different archive.
 ENV DEBIAN_FRONTEND=noninteractive
@@ -63,6 +66,17 @@ RUN set -eux; \
     mkdir -p /opt/surfer; \
     unzip -q /tmp/surfer.zip -d /opt/surfer; \
     rm /tmp/surfer.zip
+
+# code-server: the VS Code in the browser the workspace template starts.
+RUN set -eux; \
+    ver="${CODE_SERVER_VERSION#v}"; \
+    curl -fsSL -o /tmp/code-server.tgz \
+      "https://github.com/coder/code-server/releases/download/${CODE_SERVER_VERSION}/code-server-${ver}-linux-amd64.tar.gz"; \
+    echo "${CODE_SERVER_SHA256}  /tmp/code-server.tgz" \
+      | sha256sum -c -; \
+    mkdir -p /opt/code-server; \
+    tar -xzf /tmp/code-server.tgz -C /opt/code-server --strip-components=1; \
+    rm /tmp/code-server.tgz
 
 # ── Build the exact Verilator release (the suite ships 5.055-devel) ─────────
 FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c AS verilator-build
@@ -109,6 +123,40 @@ RUN cmake -S /src/yosys -B /src/yosys/build \
 RUN cmake --build /src/yosys/build -j"$(nproc)" \
  && cmake --install /src/yosys/build
 
+# ── Surfer web (WASM) — the browser build of the SAME pinned Surfer ─────────
+# The Surfer project does not publish a pinned downloadable web bundle (its
+# hosted app tracks main and tag-pipeline artifacts expire in an hour), so the
+# browser build is compiled from the official v0.7.0 source at its tagged
+# commit. Rust and trunk are pinned; the output is copied into the runtime
+# image and smoke-tested against the native surfer version.
+FROM rust:1.93-bookworm@sha256:7c4ae649a84014c467d79319bbf17ce2632ae8b8be123ac2fb2ea5be46823f31 AS surfer-web-build
+ARG SURFER_VERSION=v0.7.0
+ARG SURFER_COMMIT=bd749b1f786c1c62cd67893ca71346cbe6983915
+ARG TRUNK_VERSION=v0.21.14
+ARG TRUNK_SHA256=f2b4680cd239693a646a2795e4633c625328d7b2a044fbe749fa3a2fe9e7036b
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl git xz-utils \
+ && rm -rf /var/lib/apt/lists/*
+RUN rustup target add wasm32-unknown-unknown
+RUN set -eux; \
+    curl -fsSL -o /tmp/trunk.tgz \
+      "https://github.com/trunk-rs/trunk/releases/download/${TRUNK_VERSION}/trunk-x86_64-unknown-linux-gnu.tar.gz"; \
+    echo "${TRUNK_SHA256}  /tmp/trunk.tgz" | sha256sum -c -; \
+    tar -xzf /tmp/trunk.tgz -C /usr/local/bin; \
+    chmod 0755 /usr/local/bin/trunk; \
+    rm /tmp/trunk.tgz
+RUN git clone --branch "${SURFER_VERSION}" --recurse-submodules --shallow-submodules \
+      https://gitlab.com/surfer-project/surfer.git /src/surfer \
+ && test "$(git -C /src/surfer rev-parse HEAD)" = "${SURFER_COMMIT}"
+WORKDIR /src/surfer
+RUN RUSTFLAGS="--cfg=web_sys_unstable_apis" trunk build --config=surfer/Trunk.toml index.html \
+      --release --public-url /dist --features accesskit
+RUN mkdir -p /opt/surfer-web \
+ && cp -r surfer/dist/. /opt/surfer-web/ \
+ && sed -i 's|/dist/|./|g' /opt/surfer-web/index.html \
+ && printf '%s\n' "${SURFER_VERSION}" > /opt/surfer-web/VERSION
+
 # ── Runtime image ───────────────────────────────────────────────────────────
 FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c AS eda
 ARG UBUNTU_VERSION=26.04
@@ -143,6 +191,8 @@ RUN apt-get update \
 COPY --from=fetch /opt/oss-cad-suite /opt/oss-cad-suite
 COPY --from=fetch /opt/verible /opt/verible
 COPY --from=fetch /opt/surfer /opt/surfer
+COPY --from=fetch /opt/code-server /opt/code-server
+COPY --from=surfer-web-build /opt/surfer-web /opt/surfer-web
 COPY --from=yosys-build /opt/yosys /opt/yosys
 COPY --from=verilator-build /opt/verilator /opt/verilator
 
@@ -165,6 +215,7 @@ RUN set -eux; \
     for b in /opt/verible/bin/*; do ln -sf "$b" "/usr/local/bin/$(basename "$b")"; done; \
     ln -sf /opt/surfer/surfer /usr/local/bin/surfer; \
     ln -sf /opt/surfer/surver /usr/local/bin/surver; \
+    ln -sf /opt/code-server/bin/code-server /usr/local/bin/code-server; \
     ln -sf /opt/cocotb/bin/cocotb-config /usr/local/bin/cocotb-config
 
 ENV PATH="/usr/local/bin:/usr/bin:/bin:/opt/oss-cad-suite/bin:/opt/oss-cad-suite/py3bin"
@@ -177,10 +228,11 @@ COPY smoke /opt/smoke
 RUN chmod 0755 /usr/local/bin/check-versions /opt/smoke/run.sh \
  && check-versions
 
-RUN /usr/sbin/groupadd --gid 1001 eda \
- && /usr/sbin/useradd --uid 1001 --gid 1001 --create-home --shell /bin/bash eda
-ENV HOME=/home/eda
-WORKDIR /home/eda
+# The workspace template runs as uid 1001 and expects HOME=/home/coder.
+RUN /usr/sbin/groupadd --gid 1001 coder \
+ && /usr/sbin/useradd --uid 1001 --gid 1001 --create-home --shell /bin/bash coder
+ENV HOME=/home/coder
+WORKDIR /home/coder
 USER 1001:1001
 
 CMD ["/bin/bash"]

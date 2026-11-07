@@ -81,6 +81,17 @@ The Verilator/Yosys/cocotb/Verible/Surfer pins move only by editing the
 Dockerfile arguments and the checksums in it; a bump is a deliberate change
 because the platform's toolchain policy pins them.
 
+**code-server, Surfer and trunk are manual bumps.** Renovate has no digest
+source that pairs a version with the code-server/trunk tarball SHA-256 or the
+Surfer tag's commit, so a manager that bumped only the version would open a PR
+that fails `sha256sum -c` or the commit check. Instead, for each of them:
+
+1. Update the version ARG and the paired SHA-256/commit ARG in `Dockerfile`.
+2. For Surfer the native zip, the web build and the smoke test all follow
+   `SURFER_VERSION` + `SURFER_COMMIT`; update both together.
+3. Open the PR; the build re-runs the version gate and the smoke regression
+   (tool pins, code-server, the Surfer web bundle).
+
 ## What is in the image
 
 | What | Where |

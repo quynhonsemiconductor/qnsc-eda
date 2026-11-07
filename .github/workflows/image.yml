@@ -181,6 +181,12 @@ jobs:
           REF: ${{ steps.pull.outputs.ref }}
         run: |
           set -euo pipefail
-          gh attestation verify "oci://${REF}" --repo "$GITHUB_REPOSITORY"
+          # The attestations are minted by the ci reusable this workflow calls,
+          # so the certificate SAN is the REUSABLE workflow path in the ci repo,
+          # not this repository. Without --signer-workflow the default identity
+          # check expects a qnsc-eda workflow and rejects a valid attestation.
           gh attestation verify "oci://${REF}" --repo "$GITHUB_REPOSITORY" \
-            --predicate-type https://spdx.dev/Document
+            --signer-workflow quynhonsemiconductor/ci/.github/workflows/ghcr-publish.yml
+          gh attestation verify "oci://${REF}" --repo "$GITHUB_REPOSITORY" \
+            --predicate-type https://spdx.dev/Document \
+            --signer-workflow quynhonsemiconductor/ci/.github/workflows/ghcr-publish.yml
